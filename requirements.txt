@@ -1,3 +1,4 @@
 flask
 genshin.py
 ramael
+requests
