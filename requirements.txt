@@ -4,3 +4,4 @@ ramael
 requests
 genshin
 uvicorn
+fastapi
