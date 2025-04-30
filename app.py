@@ -4,9 +4,6 @@ from fastapi import FastAPI, HTTPException, Request
 from pydantic import BaseModel
 import os
 
-port = int(os.environ.get("PORT", 8080))
-uvicorn.run(app, host="0.0.0.0", port=port)
-
 app = FastAPI()
 
 class AuthData(BaseModel):
@@ -50,3 +47,5 @@ async def get_characters(data: AuthData):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"❌ Ошибка: {str(e)}")
 
+port = int(os.environ.get("PORT", 8080))
+uvicorn.run(app, host="0.0.0.0", port=port)
