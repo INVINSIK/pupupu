@@ -1,8 +1,8 @@
-import uvicorn
-import genshin
-from fastapi import FastAPI, HTTPException, Request
-from pydantic import BaseModel
 import os
+import genshin
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+import uvicorn
 
 app = FastAPI()
 
@@ -10,42 +10,42 @@ class AuthData(BaseModel):
     ltuid: str
     ltoken: str
     uid: str
+    nickname: str
 
 @app.post("/characters")
 async def get_characters(data: AuthData):
     try:
-        # 1. Создаем клиент
+        # Создаем клиент и логинимся
         client = genshin.Client()
         client.set_cookies(ltuid=data.ltuid, ltoken=data.ltoken)
 
-        # 2. Получаем игровые аккаунты и устанавливаем нужный
-        accounts = await client.get_game_accounts()
-        account = next(acc for acc in accounts if str(acc.uid) == str(data.uid))
-        client.set_game_accounts(account)
+        # Получаем персонажей
+        chars = await client.get_genshin_characters(uid=int(data.uid))
 
-        # 3. Получаем список персонажей
-        characters = await client.get_characters()
-
-        # 4. Преобразуем результат
         result = {
-            "uid": account.uid,
-            "nickname": account.nickname,
+            "nickname": data.nickname,
+            "uid": data.uid,
             "characters": [
                 {
                     "name": char.name,
-                    "element": char.element.name if char.element else None,
-                    "rarity": char.rarity,
-                    "level": char.level,
                     "constellation": char.constellation,
+                    "level": char.level,
+                    "element": char.element.value,
                 }
-                for char in characters
+                for char in chars
             ]
         }
 
         return result
 
+    except genshin.errors.InvalidCookies as e:
+        raise HTTPException(status_code=401, detail="Неверные куки: ltuid/ltoken недействительны")
+    except genshin.errors.GenshinException as e:
+        raise HTTPException(status_code=500, detail=f"Ошибка API: {str(e)}")
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"❌ Ошибка: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"❌ Ошибка: {repr(e)}")
 
-port = int(os.environ.get("PORT", 8080))
-uvicorn.run(app, host="0.0.0.0", port=port)
+# Запуск на правильном порту
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8080))
+    uvicorn.run("app:app", host="0.0.0.0", port=port)
