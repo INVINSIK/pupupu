@@ -3,3 +3,4 @@ genshin.py
 ramael
 requests
 genshin
+uvicorn
