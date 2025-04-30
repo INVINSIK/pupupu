@@ -1,41 +1,48 @@
-from flask import Flask, request, jsonify
+import uvicorn
 import genshin
-import asyncio
+from fastapi import FastAPI, HTTPException, Request
+from pydantic import BaseModel
 
-app = Flask(__name__)
+app = FastAPI()
 
-@app.route("/get_characters", methods=["POST"])
-def get_characters():
-    data = request.json
-    ltuid = data.get("ltuid")
-    ltoken = data.get("ltoken")
-    uid = data.get("uid")
+class AuthData(BaseModel):
+    ltuid: str
+    ltoken: str
+    uid: str
 
-    if not ltuid or not ltoken or not uid:
-        return jsonify({"status": "error", "message": "Missing ltuid, ltoken or uid"}), 400
-
+@app.post("/characters")
+async def get_characters(data: AuthData):
     try:
-        # Запускаем асинхронную функцию в обычной синхронной обертке
-        result = asyncio.run(fetch_characters(ltuid, ltoken, uid))
-        return jsonify({"status": "success", "characters": result})
+        # 1. Создаем клиент
+        client = genshin.Client()
+        client.set_cookies(ltuid=data.ltuid, ltoken=data.ltoken)
+
+        # 2. Получаем игровые аккаунты и устанавливаем нужный
+        accounts = await client.get_game_accounts()
+        account = next(acc for acc in accounts if str(acc.uid) == str(data.uid))
+        client.set_game_accounts(account)
+
+        # 3. Получаем список персонажей
+        characters = await client.get_characters()
+
+        # 4. Преобразуем результат
+        result = {
+            "uid": account.uid,
+            "nickname": account.nickname,
+            "characters": [
+                {
+                    "name": char.name,
+                    "element": char.element.name if char.element else None,
+                    "rarity": char.rarity,
+                    "level": char.level,
+                    "constellation": char.constellation,
+                }
+                for char in characters
+            ]
+        }
+
+        return result
+
     except Exception as e:
-        return jsonify({"status": "error", "message": str(e)}), 500
+        raise HTTPException(status_code=500, detail=f"❌ Ошибка: {str(e)}")
 
-
-async def fetch_characters(ltuid, ltoken, uid):
-    client = genshin.Client()
-    client.set_cookies(ltuid=ltuid, ltoken=ltoken)
-
-    record = await client.get_full_genshin_user(uid=int(uid))
-    characters = record.characters
-
-    return {
-        char.name: char.constellations_unlocked
-        for char in characters
-    }
-
-
-if __name__ == "__main__":
-    import os
-    port = int(os.environ.get("PORT", 8080))
-    app.run(host="0.0.0.0", port=port)
